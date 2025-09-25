@@ -1,0 +1,108 @@
+services:
+  # Distributor service
+  distributor:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - INGEST_BUFFER_SIZE=10000
+      - PER_ANALYZER_QUEUE_SIZE=1000
+      - SENDER_RETRIES=3
+      - SENDER_TIMEOUT_MS=500
+      - HEALTH_CHECK_INTERVAL_SEC=2
+      - HEALTH_CHECK_TIMEOUT_SEC=1
+      - MAX_FAILURES=5
+      - ANALYZERS=http://analyzer-1:9001=0.4,http://analyzer-2:9002=0.3,http://analyzer-3:9003=0.3
+    depends_on:
+      - analyzer-1
+      - analyzer-2
+      - analyzer-3
+    networks:
+      - log-streamer-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 2
+      start_period: 10s
+
+  # Analyzer 1
+  analyzer-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.analyzer
+    environment:
+      - PORT=9001
+      - ANALYZER_ID=analyzer-1
+      - PROCESSING_DELAY_MS=10
+    networks:
+      - log-streamer-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 2
+      start_period: 5s
+
+  # Analyzer 2
+  analyzer-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.analyzer
+    environment:
+      - PORT=9002
+      - ANALYZER_ID=analyzer-2
+      - PROCESSING_DELAY_MS=20
+    networks:
+      - log-streamer-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 2
+      start_period: 5s
+
+  # Analyzer 3
+  analyzer-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.analyzer
+    environment:
+      - PORT=9003
+      - ANALYZER_ID=analyzer-3
+      - PROCESSING_DELAY_MS=15
+    networks:
+      - log-streamer-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 2
+      start_period: 5s
+
+  # Emitter (load generator)
+  emitter:
+    build:
+      context: .
+      dockerfile: Dockerfile.emitter
+    environment:
+      - TARGET_URL=http://distributor:8080/ingest
+      - RATE=100
+      - CONCURRENCY=20
+      - PACKET_SIZE=5
+      - EMITTER_ID=emitter-1
+    depends_on:
+      - distributor
+    networks:
+      - log-streamer-network
+    restart: "no"
+
+networks:
+  log-streamer-network:
+    driver: bridge
+
+# Optional: Add volumes for persistent data
+volumes:
+  log-data:
+    driver: local
