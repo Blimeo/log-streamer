@@ -4,9 +4,9 @@
 *.dll
 *.so
 *.dylib
-distributor
-analyzer
-emitter
+/distributor
+/analyzer
+/emitter
 
 # Test binary, built with `go test -c`
 *.test

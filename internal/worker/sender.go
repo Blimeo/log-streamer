@@ -12,7 +12,7 @@ import (
 	"log-streamer/internal/model"
 )
 
-// Sender handles sending packets to a specific analyzer
+// Handles sending packets to a specific analyzer
 type Sender struct {
 	analyzer     *model.AnalyzerConfig
 	queue        <-chan *model.LogPacket
@@ -27,19 +27,19 @@ type Sender struct {
 	mu           sync.RWMutex
 }
 
-// SenderConfig holds configuration for the sender
+// Holds configuration for the sender
 type SenderConfig struct {
 	Retries     int
 	Timeout     time.Duration
 	MaxFailures int
 }
 
-// RouterInterface defines the interface for router operations
+// Defines the interface for router operations
 type RouterInterface interface {
 	SetAnalyzerHealth(id string, healthy bool)
 }
 
-// NewSender creates a new sender for an analyzer
+// Creates a new sender for an analyzer
 func NewSender(analyzer *model.AnalyzerConfig, queue <-chan *model.LogPacket, config *SenderConfig, router RouterInterface) *Sender {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -63,13 +63,13 @@ func NewSender(analyzer *model.AnalyzerConfig, queue <-chan *model.LogPacket, co
 	}
 }
 
-// Start starts the sender goroutine
+// Starts the sender goroutine
 func (s *Sender) Start() {
 	s.wg.Add(1)
 	go s.run()
 }
 
-// Stop stops the sender
+// Stops the sender
 func (s *Sender) Stop() {
 	s.cancel()
 	s.wg.Wait()
@@ -192,7 +192,7 @@ func (s *Sender) sendHTTPRequest(jsonData []byte) bool {
 	return false
 }
 
-// HealthCheck performs a health check on the analyzer
+// Performs a health check on the analyzer
 func (s *Sender) HealthCheck() bool {
 	req, err := http.NewRequestWithContext(s.ctx, "GET", s.analyzer.URL+"/health", nil)
 	if err != nil {
@@ -216,38 +216,38 @@ func (s *Sender) HealthCheck() bool {
 	return resp.StatusCode >= 200 && resp.StatusCode < 300
 }
 
-// GetID returns the analyzer ID
+// Returns the analyzer ID
 func (s *Sender) GetID() string {
 	return s.analyzer.ID
 }
 
-// GetURL returns the analyzer URL
+// Returns the analyzer URL
 func (s *Sender) GetURL() string {
 	return s.analyzer.URL
 }
 
-// SetHealthy sets the health status
+// Sets the health status
 func (s *Sender) SetHealthy(healthy bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.healthy = healthy
 }
 
-// IsHealthy returns the health status
+// Returns the health status
 func (s *Sender) IsHealthy() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.healthy
 }
 
-// GetFailureCount returns the failure count
+// Returns the failure count
 func (s *Sender) GetFailureCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.failureCount
 }
 
-// UpdateRouterHealth updates the router's health status for this analyzer
+// Updates the router's health status for this analyzer
 func (s *Sender) UpdateRouterHealth(healthy bool) {
 	s.router.SetAnalyzerHealth(s.analyzer.ID, healthy)
 }

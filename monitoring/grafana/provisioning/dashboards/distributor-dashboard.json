@@ -1,0 +1,107 @@
+{
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": "-- Grafana --",
+          "enable": true,
+          "hide": true,
+          "iconColor": "#000000",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "gnetId": null,
+    "graphTooltip": 0,
+    "id": null,
+    "iteration": 162738,
+    "links": [],
+    "panels": [
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "id": 1,
+        "options": {},
+        "targets": [
+          {"expr": "rate(distributor_total_messages_total[1m])", "legendFormat": "messages/sec", "refId": "A"}
+        ],
+        "title": "Messages/sec (overall)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "id": 2,
+        "options": {},
+        "targets": [
+          {"expr": "rate(distributor_total_packets_total[1m])", "legendFormat": "packets/sec", "refId": "A"}
+        ],
+        "title": "Packets/sec (overall)",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "id": 3,
+        "options": {},
+        "targets": [
+          {"expr": "sum by (analyzer) (rate(distributor_messages_by_analyzer_total[1m]))", "legendFormat": "{{analyzer}}", "refId": "A"}
+        ],
+        "title": "Messages/sec by Analyzer",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "id": 4,
+        "options": {},
+        "targets": [
+          {"expr": "sum by (analyzer) (rate(distributor_packets_by_analyzer_total[1m]))", "legendFormat": "{{analyzer}}", "refId": "A"}
+        ],
+        "title": "Packets/sec by Analyzer",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "gridPos": {"h": 5, "w": 12, "x": 0, "y": 16},
+        "id": 5,
+        "options": {},
+        "targets": [
+          {"expr": "distributor_queue_depth", "legendFormat": "{{analyzer}}", "refId": "A"}
+        ],
+        "title": "Queue Depth per Analyzer",
+        "type": "timeseries"
+      },
+      {
+        "datasource": "Prometheus",
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "gridPos": {"h": 5, "w": 12, "x": 12, "y": 16},
+        "id": 6,
+        "options": {},
+        "targets": [
+          {"expr": "distributor_healthy_analyzers", "legendFormat": "healthy", "refId": "A"},
+          {"expr": "distributor_total_analyzers", "legendFormat": "total", "refId": "B"}
+        ],
+        "title": "Healthy vs Total Analyzers",
+        "type": "timeseries"
+      }
+    ],
+    "refresh": "5s",
+    "schemaVersion": 30,
+    "style": "dark",
+    "tags": ["distributor"],
+    "templating": {"list": []},
+    "time": {"from": "now-1m", "to": "now"},
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "Distributor Overview",
+    "uid": "distributor-overview",
+    "version": 1
+  }

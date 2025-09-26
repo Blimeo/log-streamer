@@ -10,7 +10,7 @@ import (
 	"log-streamer/internal/model"
 )
 
-// Config holds all configuration for the distributor
+// Holds all configuration for the distributor
 type Config struct {
 	// Server configuration
 	Port             string `json:"port"`
@@ -29,11 +29,10 @@ type Config struct {
 	HealthCheckTimeout  time.Duration `json:"health_check_timeout"`
 
 	// Circuit breaker configuration
-	MaxFailures     int           `json:"max_failures"`
-	RecoveryTimeout time.Duration `json:"recovery_timeout"`
+	MaxFailures int `json:"max_failures"`
 }
 
-// DefaultConfig returns a default configuration
+// Returns a default configuration
 func DefaultConfig() *Config {
 	return &Config{
 		Port:                 "8080",
@@ -44,11 +43,10 @@ func DefaultConfig() *Config {
 		HealthCheckInterval:  5 * time.Second,
 		HealthCheckTimeout:   2 * time.Second,
 		MaxFailures:          5,
-		RecoveryTimeout:      60 * time.Second,
 	}
 }
 
-// LoadFromEnv loads configuration from environment variables
+// Loads configuration from environment variables
 func LoadFromEnv() (*Config, error) {
 	config := DefaultConfig()
 
@@ -158,7 +156,7 @@ func parseAnalyzersFromEnv() ([]model.AnalyzerConfig, error) {
 	return analyzers, nil
 }
 
-// Validate validates the configuration
+// Validates the configuration
 func (c *Config) Validate() error {
 	if c.Port == "" {
 		return fmt.Errorf("port is required")

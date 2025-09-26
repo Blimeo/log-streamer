@@ -1,0 +1,14 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'distributor'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['distributor:9100']   # service name and port in docker-compose
+
+  # Optional: Prometheus self, Grafana or other exporters if desired
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['prometheus:9090']

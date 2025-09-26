@@ -10,24 +10,24 @@ import (
 	"log-streamer/internal/model"
 )
 
-// DistributorAPI handles HTTP requests for the distributor
+// Handles HTTP requests for the distributor
 type DistributorAPI struct {
 	router  RouterInterface
 	metrics MetricsInterface
 }
 
-// RouterInterface defines the interface for router operations
+// Defines the interface for router operations
 type RouterInterface interface {
 	SubmitRequest(packet *model.LogPacket) chan model.RouteResponse
 	GetMetrics() model.Metrics
 }
 
-// MetricsInterface defines the interface for metrics operations
+// Defines the interface for metrics operations
 type MetricsInterface interface {
 	GetMetrics() model.Metrics
 }
 
-// NewDistributorAPI creates a new API handler
+// Creates a new API handler
 func NewDistributorAPI(router RouterInterface) *DistributorAPI {
 	return &DistributorAPI{
 		router:  router,
@@ -35,7 +35,7 @@ func NewDistributorAPI(router RouterInterface) *DistributorAPI {
 	}
 }
 
-// IngestHandler handles POST /ingest requests
+// Handles POST /ingest requests
 func (api *DistributorAPI) IngestHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -82,7 +82,7 @@ func (api *DistributorAPI) IngestHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// MetricsHandler handles GET /metrics requests
+// Handles GET /metrics requests
 func (api *DistributorAPI) MetricsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -95,7 +95,7 @@ func (api *DistributorAPI) MetricsHandler(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(metrics)
 }
 
-// HealthHandler handles GET /health requests
+// Handles GET /health requests
 func (api *DistributorAPI) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

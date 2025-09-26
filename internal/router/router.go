@@ -9,10 +9,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"log-streamer/internal/metrics"
 	"log-streamer/internal/model"
 )
 
-// Analyzer represents a single analyzer with its state
+// Represents a single analyzer with its state
 type Analyzer struct {
 	Config       model.AnalyzerConfig
 	Queue        chan *model.LogPacket
@@ -22,7 +23,7 @@ type Analyzer struct {
 	mu           sync.RWMutex
 }
 
-// Router handles packet routing to analyzers using message-based weighted selection
+// Handles packet routing to analyzers using message-based weighted selection
 type Router struct {
 	analyzers   []*Analyzer
 	mu          sync.RWMutex
@@ -31,7 +32,7 @@ type Router struct {
 	requestChan chan *model.RouteRequest
 }
 
-// NewRouter creates a new router with the given analyzers
+// Creates a new router with the given analyzers
 func NewRouter(analyzers []model.AnalyzerConfig, queueSize int) *Router {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -59,7 +60,7 @@ func NewRouter(analyzers []model.AnalyzerConfig, queueSize int) *Router {
 	return router
 }
 
-// RouteRequest routes a packet synchronously and sends response via reply channel
+// Routes a packet synchronously and sends response via reply channel
 func (r *Router) RouteRequest(req *model.RouteRequest) {
 	response := r.routePacket(req.Packet)
 	select {
@@ -74,7 +75,6 @@ func (r *Router) RouteRequest(req *model.RouteRequest) {
 }
 
 // routePacket performs the actual routing logic and returns a response
-// MessagesSent counter is only incremented on successful enqueue to analyzer queue
 func (r *Router) routePacket(packet *model.LogPacket) model.RouteResponse {
 	healthyAnalyzers := r.getHealthyAnalyzers()
 	if len(healthyAnalyzers) == 0 {
@@ -99,8 +99,13 @@ func (r *Router) routePacket(packet *model.LogPacket) model.RouteResponse {
 		// Only increment counters on successful enqueue
 		atomic.AddInt64(&analyzer.PacketCount, 1)
 		atomic.AddUint64(&analyzer.MessagesSent, uint64(len(packet.Messages)))
-		log.Printf("Successfully enqueued packet %s to analyzer %s (%d messages)",
-			packet.PacketID, analyzer.Config.ID, len(packet.Messages))
+
+		// Update Prometheus metrics
+		metrics.TotalPackets.Inc()
+		metrics.TotalMessages.Add(float64(len(packet.Messages)))
+		metrics.PacketsByAnalyzer.WithLabelValues(analyzer.Config.ID).Inc()
+		metrics.MessagesByAnalyzer.WithLabelValues(analyzer.Config.ID).Add(float64(len(packet.Messages)))
+
 		return model.RouteResponse{
 			Success: true,
 			Error:   nil,
@@ -173,7 +178,7 @@ func (r *Router) selectAnalyzerForPacket(analyzers []*Analyzer, messageCount uin
 	return chosen
 }
 
-// GetAnalyzer returns an analyzer by ID
+// Returns an analyzer by ID
 func (r *Router) GetAnalyzer(id string) *Analyzer {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -186,7 +191,7 @@ func (r *Router) GetAnalyzer(id string) *Analyzer {
 	return nil
 }
 
-// GetAllAnalyzers returns all analyzers
+// Returns all analyzers
 func (r *Router) GetAllAnalyzers() []*Analyzer {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -197,7 +202,7 @@ func (r *Router) GetAllAnalyzers() []*Analyzer {
 	return analyzers
 }
 
-// SetAnalyzerHealth updates the health status of an analyzer
+// Updates the health status of an analyzer
 func (r *Router) SetAnalyzerHealth(id string, healthy bool) {
 	analyzer := r.GetAnalyzer(id)
 	if analyzer == nil {
@@ -227,23 +232,26 @@ func (r *Router) SetAnalyzerHealth(id string, healthy bool) {
 	}
 }
 
-// GetMetrics returns current routing metrics
+// Returns current routing metrics
 func (r *Router) GetMetrics() model.Metrics {
 	analyzers := r.GetAllAnalyzers()
 
 	metrics := model.Metrics{
-		PacketsByAnalyzer:  make(map[string]int64),
-		MessagesByAnalyzer: make(map[string]uint64),
-		Timestamp:          time.Now(),
+		PacketsByAnalyzer:    make(map[string]int64),
+		MessagesByAnalyzer:   make(map[string]uint64),
+		QueueDepthByAnalyzer: make(map[string]int),
+		Timestamp:            time.Now(),
 	}
 
 	healthyCount := 0
 	for _, analyzer := range analyzers {
 		packetCount := atomic.LoadInt64(&analyzer.PacketCount)
 		messageCount := atomic.LoadUint64(&analyzer.MessagesSent)
+		queueDepth := len(analyzer.Queue)
 
 		metrics.PacketsByAnalyzer[analyzer.Config.ID] = packetCount
 		metrics.MessagesByAnalyzer[analyzer.Config.ID] = messageCount
+		metrics.QueueDepthByAnalyzer[analyzer.Config.ID] = queueDepth
 		metrics.TotalPackets += packetCount
 		metrics.TotalMessages += messageCount
 
@@ -260,7 +268,27 @@ func (r *Router) GetMetrics() model.Metrics {
 	return metrics
 }
 
-// StartRequestHandler starts the request handler goroutine
+// Updates Prometheus gauge metrics
+func (r *Router) UpdatePrometheusGauges() {
+	analyzers := r.GetAllAnalyzers()
+
+	healthyCount := 0
+	for _, analyzer := range analyzers {
+		queueDepth := len(analyzer.Queue)
+		metrics.QueueDepth.WithLabelValues(analyzer.Config.ID).Set(float64(queueDepth))
+
+		analyzer.mu.RLock()
+		if analyzer.Health.Healthy {
+			healthyCount++
+		}
+		analyzer.mu.RUnlock()
+	}
+
+	metrics.HealthyAnalyzers.Set(float64(healthyCount))
+	metrics.TotalAnalyzers.Set(float64(len(analyzers)))
+}
+
+// Starts the request handler goroutine
 func (r *Router) StartRequestHandler() {
 	go func() {
 		for {
@@ -285,7 +313,7 @@ func (r *Router) StartRequestHandler() {
 	}()
 }
 
-// SubmitRequest submits a routing request and returns the response channel
+// Submits a routing request and returns the response channel
 func (r *Router) SubmitRequest(packet *model.LogPacket) chan model.RouteResponse {
 	reply := make(chan model.RouteResponse, 1)
 	req := &model.RouteRequest{
@@ -311,7 +339,7 @@ func (r *Router) SubmitRequest(packet *model.LogPacket) chan model.RouteResponse
 	}
 }
 
-// Stop stops the router
+// Stops the router
 func (r *Router) Stop() {
 	r.cancel()
 

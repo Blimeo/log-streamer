@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Checker performs health checks on analyzers
+// Performs health checks on analyzers
 type Checker struct {
 	analyzers []AnalyzerInterface
 	interval  time.Duration
@@ -17,7 +17,7 @@ type Checker struct {
 	wg        sync.WaitGroup
 }
 
-// AnalyzerInterface defines the interface for analyzer health operations
+// Defines the interface for analyzer health operations
 type AnalyzerInterface interface {
 	GetID() string
 	GetURL() string
@@ -28,7 +28,7 @@ type AnalyzerInterface interface {
 	UpdateRouterHealth(healthy bool)
 }
 
-// NewChecker creates a new health checker
+// Creates a new health checker
 func NewChecker(analyzers []AnalyzerInterface, interval, timeout time.Duration) *Checker {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -41,13 +41,13 @@ func NewChecker(analyzers []AnalyzerInterface, interval, timeout time.Duration) 
 	}
 }
 
-// Start starts the health checker
+// Starts the health checker
 func (c *Checker) Start() {
 	c.wg.Add(1)
 	go c.run()
 }
 
-// Stop stops the health checker
+// Stops the health checker
 func (c *Checker) Stop() {
 	c.cancel()
 	c.wg.Wait()

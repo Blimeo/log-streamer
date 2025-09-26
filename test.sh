@@ -41,6 +41,7 @@ docker-compose up --build -d
 
 # Wait for services to be ready
 echo ""
+echo "🚀 Starting emitter with high throughput of 10000 - this is both a load test and a functionality test"
 echo "⏳ Waiting for services to be ready..."
 sleep 3
 
@@ -93,7 +94,7 @@ fi
 # Test metrics endpoint
 echo ""
 echo "📊 Testing metrics endpoint..."
-metrics=$(curl -s http://localhost:8080/metrics)
+metrics=$(curl -s http://localhost:8080/metrics-json)
 if echo "$metrics" | grep -q "total_packets"; then
     print_status "Metrics endpoint working"
     echo "Current metrics:"
@@ -102,9 +103,24 @@ else
     print_warning "Metrics endpoint not responding properly"
 fi
 
-# Stop the default emitter first to avoid interference
-echo "Stopping default emitter to avoid interference..."
-docker-compose stop emitter 2>/dev/null || true
+echo ""
+echo "🔄 Stopping emitter and restarting all other services to reset metrics..."
+docker-compose down
+docker-compose up -d distributor analyzer-1 analyzer-2 analyzer-3
+
+# Wait for services to be ready after restart
+echo "⏳ Waiting for services to be ready after restart..."
+sleep 3
+
+# Verify services are healthy after restart
+echo "🏥 Verifying services are healthy after restart..."
+if curl -s http://localhost:8080/health | grep -q "healthy"; then
+    print_status "Distributor is healthy after restart"
+else
+    print_error "Distributor health check failed after restart"
+    docker-compose logs distributor
+    exit 1
+fi
 
 # Test load generation with mixed packet sizes
 echo ""
@@ -131,11 +147,7 @@ echo "Waiting for emitters to finish..."
 wait $emitter1_pid 2>/dev/null || true
 wait $emitter2_pid 2>/dev/null || true
 
-# Check final metrics
-echo ""
-echo "📈 Final metrics after load test:"
-final_metrics=$(curl -s http://localhost:8080/metrics)
-echo "$final_metrics" | jq '.' 2>/dev/null || echo "$final_metrics"
+final_metrics=$(curl -s http://localhost:8080/metrics-json)
 
 # Verify message-based weight distribution
 echo ""
@@ -153,9 +165,9 @@ if command -v jq >/dev/null 2>&1; then
         echo "Total messages distributed: $total_messages"
         echo ""
         echo "Expected MESSAGE distribution (from docker-compose.yml):"
-        echo "  analyzer-1: 40% of messages (weight: 0.4)"
+        echo "  analyzer-1: 50% of messages (weight: 0.5)"
         echo "  analyzer-2: 30% of messages (weight: 0.3)" 
-        echo "  analyzer-3: 30% of messages (weight: 0.3)"
+        echo "  analyzer-3: 20% of messages (weight: 0.2)"
         echo ""
         echo "Actual MESSAGE distribution:"
         
@@ -231,19 +243,12 @@ fi
 # Test weight redistribution when analyzer is offline
 echo ""
 echo "🔄 Testing weight redistribution with analyzer offline..."
-echo "Starting emitters to test traffic distribution to remaining analyzers..."
+echo "Starting emitters for 3 seconds to test traffic distribution to remaining analyzers..."
 
 # Get baseline metrics before starting new traffic
-baseline_metrics=$(curl -s http://localhost:8080/metrics)
+baseline_metrics=$(curl -s http://localhost:8080/metrics-json)
 baseline_analyzer1=$(echo "$baseline_metrics" | jq -r '.messages_by_analyzer["analyzer-1"] // 0')
 baseline_analyzer3=$(echo "$baseline_metrics" | jq -r '.messages_by_analyzer["analyzer-3"] // 0')
-
-echo "Baseline message counts:"
-echo "  analyzer-1: $baseline_analyzer1 messages"
-echo "  analyzer-3: $baseline_analyzer3 messages"
-
-# Start emitters to generate traffic while analyzer-2 is offline
-echo "Starting emitters for 3 seconds to test offline weight distribution..."
 
 # Start emitters in background with proper timeout handling
 timeout 3 docker-compose run --rm -e TARGET_URL=http://distributor:8080/ingest -e RATE=300 -e CONCURRENCY=25 -e PACKET_SIZE=8 -e EMITTER_ID=offline-test-1 emitter > /tmp/offline_test1.log 2>&1 &
@@ -257,7 +262,7 @@ wait $offline_test1_pid 2>/dev/null || true
 wait $offline_test2_pid 2>/dev/null || true
 
 # Get final metrics
-final_metrics=$(curl -s http://localhost:8080/metrics)
+final_metrics=$(curl -s http://localhost:8080/metrics-json)
 final_analyzer1=$(echo "$final_metrics" | jq -r '.messages_by_analyzer["analyzer-1"] // 0')
 final_analyzer3=$(echo "$final_metrics" | jq -r '.messages_by_analyzer["analyzer-3"] // 0')
 
@@ -280,12 +285,12 @@ if [ "$total_offline_messages" -gt 100 ]; then
         
         echo ""
         echo "📊 Offline weight distribution analysis:"
-        echo "  analyzer-1: $pct_analyzer1% (expected ~57.1% - weight 0.4 out of 0.7 total)"
-        echo "  analyzer-3: $pct_analyzer3% (expected ~42.9% - weight 0.3 out of 0.7 total)"
+        echo "  analyzer-1: $pct_analyzer1% (expected ~71.4% - weight 0.5 out of 0.7 total)"
+        echo "  analyzer-3: $pct_analyzer3% (expected ~28.6% - weight 0.2 out of 0.7 total)"
         
-        # Expected distribution: analyzer-1 should get 4/7 ≈ 57.1%, analyzer-3 should get 3/7 ≈ 42.9%
-        expected_analyzer1=57
-        expected_analyzer3=43
+        # Expected distribution: analyzer-1 should get 5/7 ≈ 71.4%, analyzer-3 should get 2/7 ≈ 28.6%
+        expected_analyzer1=71
+        expected_analyzer3=29
         tolerance=10
         
         # Check if distribution matches expected weights
@@ -295,8 +300,8 @@ if [ "$total_offline_messages" -gt 100 ]; then
         if [ "$diff1" -le "$tolerance" ] && [ "$diff3" -le "$tolerance" ]; then
             print_status "Weight redistribution is working correctly"
             echo "  ✓ Remaining analyzers are sharing traffic according to their relative weights"
-            echo "  ✓ analyzer-1 (40% weight) gets ~57% of traffic"
-            echo "  ✓ analyzer-3 (30% weight) gets ~43% of traffic"
+            echo "  ✓ analyzer-1 (50% weight) gets ~71% of traffic"
+            echo "  ✓ analyzer-3 (20% weight) gets ~29% of traffic"
         else
             print_warning "Weight redistribution may not be working correctly"
             echo "  ⚠ analyzer-1 difference: $diff1% (expected ≤$tolerance%)"
@@ -348,7 +353,7 @@ echo "  ✓ Failure and recovery scenarios tested"
 echo "  ✓ Weight redistribution when analyzer goes offline tested"
 echo ""
 echo "To run the system manually:"
-echo "  docker-compose up --build"
+echo "  docker-compose up --build -d"
 echo ""
 echo "To test with custom load:"
 echo "  # Single emitter with custom packet size"
@@ -359,7 +364,7 @@ echo "  docker-compose run --rm -e PACKET_SIZE=5 -e EMITTER_ID=small emitter &"
 echo "  docker-compose run --rm -e PACKET_SIZE=20 -e EMITTER_ID=large emitter &"
 echo ""
 echo "To monitor metrics:"
-echo "  watch -n 1 'curl -s http://localhost:8080/metrics | jq'"
+echo "  watch -n 1 'curl -s http://localhost:8080/metrics-json | jq'"
 echo ""
 echo "Key metrics to watch:"
 echo "  - total_messages: Total messages distributed"
